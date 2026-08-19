@@ -34,10 +34,10 @@ async function startWhatsApp() {
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    // 🔹 Quando o QR for gerado
+    // When QR code is generated
     if (qr) {
       lastQRDataURL = await qrcode.toDataURL(qr);
-      console.log("🔹 QR gerado, enviando para Supabase...");
+      console.log("🔹 QR generated, sending to Supabase...");
 
       if (supabase) {
         const { error } = await supabase.from("sessões_do_whatsapp").upsert({
@@ -46,17 +46,17 @@ async function startWhatsApp() {
           status: "connecting",
           atualização: new Date().toISOString()
         });
-        if (error) console.error("❌ Erro ao salvar QR no Supabase:", error);
-        else console.log("✅ QR salvo no Supabase!");
+        if (error) console.error("❌ Error saving QR to Supabase:", error);
+        else console.log("✅ QR saved to Supabase!");
       }
     }
 
-    // ✅ Quando a conexão for aberta
+    // When connection is established
     if (connection === "open") {
       connectionStatus = "connected";
       myJid = sock.user?.id || null;
       const phoneNumber = myJid?.split("@")[0]?.replace(/\D/g, "") || null;
-      console.log("✅ WhatsApp conectado como:", myJid);
+      console.log("✅ WhatsApp connected as:", myJid);
       lastQRDataURL = null;
 
       if (supabase) {
@@ -67,15 +67,15 @@ async function startWhatsApp() {
           número: phoneNumber,
           atualização: new Date().toISOString()
         });
-        if (error) console.error("❌ Erro ao salvar status:", error);
-        else console.log(`✅ Status 'connected' salvo no Supabase! Número: ${phoneNumber}`);
+        if (error) console.error("❌ Error saving status:", error);
+        else console.log(`✅ Status 'connected' saved to Supabase! Number: ${phoneNumber}`);
       }
     }
 
-    // 🔌 Quando a conexão for fechada
+    // When connection is closed
     else if (connection === "close") {
       const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.error("🔌 Conexão fechada. Reconnect?", shouldReconnect);
+      console.error("🔌 Connection closed. Reconnect?", shouldReconnect);
       connectionStatus = "disconnected";
       myJid = null;
 
@@ -85,7 +85,7 @@ async function startWhatsApp() {
           status: "disconnected",
           atualização: new Date().toISOString()
         });
-        if (error) console.error("Erro ao atualizar status no Supabase:", error);
+        if (error) console.error("Error updating status in Supabase:", error);
       }
 
       if (shouldReconnect) setTimeout(startWhatsApp, 2000);
@@ -96,7 +96,9 @@ async function startWhatsApp() {
     }
   });
 
-  // 📩 Receber mensagens
+  // =============================================
+  // RECEIVE MESSAGES - CONSTY'S KITCHEN
+  // =============================================
   sock.ev.on("messages.upsert", async (m) => {
     const msg = m.messages?.[0];
     if (!msg || msg.key.fromMe) return;
@@ -108,40 +110,118 @@ async function startWhatsApp() {
       || "";
 
     if (!text) return;
-    console.log("📩", from, "→", text);
+    
+    const lowerText = text.toLowerCase().trim();
+    console.log("📩", from, "→", lowerText);
 
-    if (text.toLowerCase().startsWith("agendar")) {
-      const payload = {
-        user_id: DEFAULT_USER_ID,
-        cliente_jid: from,
-        titulo: "Agendamento WhatsApp",
-        detalhes: text,
-        starts_at: new Date().toISOString(),
-        status: "pending",
-        source: "whatsapp"
-      };
-      if (supabase) {
-        const { error } = await supabase.from("agenda").insert([payload]);
-        if (error) console.error("Erro ao salvar no Supabase:", error);
-      }
-      await sock.sendMessage(from, { text: "✅ Recebi seu pedido de agendamento! Em breve confirmo o horário. " });
+    // =============================================
+    // KEYWORD AUTO-REPLIES
+    // =============================================
+
+    // MENU Reply
+    if (lowerText === "menu" || lowerText === "menu" || lowerText === "1") {
+      const menuReply = `🍽️ *Consty's Kitchen Menu*
+
+*MAIN DISHES*
+- Poulet DG: 2,500 CFA
+- Poulet Braisé: 2,000 CFA
+- Fish with Plantains: 2,200 CFA
+- Ndolé: 2,500 CFA
+- Eru: 2,500 CFA
+- Koki: 1,800 CFA
+- Mbolo: 2,500 CFA
+- Fried Chicken: 1,800 CFA
+
+*SIDES*
+- Fried Plantains: 800 CFA
+- Fried Rice: 1,200 CFA
+- White Rice: 1,000 CFA
+- Beans: 1,500 CFA
+- Fries: 800 CFA
+
+*DRINKS*
+- Bissap: 500 CFA
+- Ginger Juice: 500 CFA
+- Zobo: 500 CFA
+- Mineral Water: 500 CFA
+- Soft Drink: 500 CFA
+
+📍 To order, just tell me what you'd like!
+💰 Delivery available in Buea`;
+
+      await sock.sendMessage(from, { text: menuReply });
       return;
     }
 
-    await sock.sendMessage(from, { text: "Olá! Sou a atendente virtual. Envie: agendar <detalhes> 📅" });
+    // LOCATION Reply
+    if (lowerText === "location" || lowerText === "location" || lowerText === "2") {
+      await sock.sendMessage(from, { 
+        text: `📍 *Consty's Kitchen Location*
+
+📌 Address: [Street Name], Molyko, Buea
+Opposite Total Filling Station
+South West Region, Cameroon
+
+🗣️ Landmark: Near the roundabout`
+      });
+      return;
+    }
+
+    // HOURS Reply
+    if (lowerText === "hours" || lowerText === "hours" || lowerText === "3") {
+      await sock.sendMessage(from, { 
+        text: `⏰ *Consty's Kitchen - Opening Hours*
+
+Monday - Saturday: 10 AM - 10 PM
+Sunday: Closed
+
+📞 For special orders: +237 [Constance's number]`
+      });
+      return;
+    }
+
+    // ORDER Reply
+    if (lowerText === "order" || lowerText === "order" || lowerText === "4") {
+      await sock.sendMessage(from, { 
+        text: `📝 *How to Order*
+
+1️⃣ Tell me what you'd like from the menu
+2️⃣ Provide your delivery location
+3️⃣ Confirm your order
+4️⃣ Pay via Mobile Money: +237 [Constance's number]
+
+✅ Your food will be prepared fresh and delivered hot!`
+      });
+      return;
+    }
+
+    // =============================================
+    // DEFAULT REPLY (when no keyword matches)
+    // =============================================
+    await sock.sendMessage(from, { 
+      text: `👋 Welcome to Consty's Kitchen!
+
+Reply with:
+1️⃣ "menu" - to see our full menu
+2️⃣ "location" - to find us
+3️⃣ "hours" - to see our opening times
+4️⃣ "order" - to place an order
+
+We're here to serve you! 😊`
+    });
   });
 }
 
-// 🌐 Rotas HTTP básicas
+// 🌐 HTTP Routes
 app.get("/", (_req, res) => {
   res.type("html").send(`
     <html>
       <head><meta charset="utf-8" /></head>
       <body style="font-family: system-ui; padding: 20px">
-        <h1>WhatsApp Bot — Baileys</h1>
+        <h1>🤖 Consty's Kitchen WhatsApp Bot</h1>
         <p>Status: <b>${connectionStatus}</b></p>
-        <p>Meu JID: <code>${myJid ?? "-"}</code></p>
-        <p><a href="/qr">Abrir QR Code</a></p>
+        <p>My JID: <code>${myJid ?? "-"}</code></p>
+        <p><a href="/qr">📱 Open QR Code</a></p>
       </body>
     </html>
   `);
@@ -150,25 +230,26 @@ app.get("/", (_req, res) => {
 app.get("/qr", (_req, res) => {
   const img = lastQRDataURL
     ? `<img src="${lastQRDataURL}" style="max-width:360px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.15)" />`
-    : `<p>Nenhum QR disponível. Talvez já esteja conectado.</p>`;
+    : `<p>No QR available. Already connected.</p>`;
   res.type("html").send(`
     <html>
-      <head><meta charset="utf-8" /><meta http-equiv="refresh" content="5"><title>QR Code – WhatsApp</title></head>
+      <head><meta charset="utf-8" /><meta http-equiv="refresh" content="5"><title>QR Code – Consty's Kitchen</title></head>
       <body style="font-family:system-ui;display:grid;place-items:center;height:100vh">
+        <h2>Scan this QR with WhatsApp</h2>
         ${img}
-        <p style="color:#666">Atualiza automaticamente a cada 5s</p>
-        <a href="/">Voltar</a>
+        <p style="color:#666">Auto-refreshes every 5 seconds</p>
+        <a href="/">Back</a>
       </body>
     </html>
   `);
 });
 
-// 📤 Enviar mensagens manualmente via POST
+// Send messages manually via POST
 app.post("/send", async (req, res) => {
   try {
     const { to, message } = req.body;
-    if (!sock) return res.status(400).json({ ok: false, error: "Socket indisponível" });
-    if (!to || !message) return res.status(400).json({ ok: false, error: "Informe 'to' e 'message'" });
+    if (!sock) return res.status(400).json({ ok: false, error: "Socket unavailable" });
+    if (!to || !message) return res.status(400).json({ ok: false, error: "Provide 'to' and 'message'" });
     await sock.sendMessage(to.includes("@s.whatsapp.net") ? to : (to + "@s.whatsapp.net"), { text: message });
     res.json({ ok: true });
   } catch (e) {
@@ -177,6 +258,6 @@ app.post("/send", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`HTTP server on :${PORT}`));
+app.listen(PORT, () => console.log(`✅ HTTP server running on port :${PORT}`));
 
-startWhatsApp().catch(err => console.error("Falha ao iniciar WhatsApp:", err));
+startWhatsApp().catch(err => console.error("❌ Failed to start WhatsApp:", err));
